@@ -1,4 +1,4 @@
-#include <ShinsGameClass>
+#include ShinsGameClass.ahk
 setbatchlines,-1 ;VERY important for stable fps
 
 boxSize := 128 ;walls will be 128x128 pixels
