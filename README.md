@@ -4,7 +4,7 @@ Supports 32bit and 64bit for systems running windows 7+ including the newest win
 
 # YouTube simple overview and examples
 
-[![Video](https://img.youtube.com/vi/L2Cb1UCJDEg/default.jpg)](https://www.youtube.com/watch?v=L2Cb1UCJDEg)
+[![Video](https://img.youtube.com/vi/Gg4ywjlsauY/default.jpg)](https://www.youtube.com/watch?v=Gg4ywjlsauY)
 
 ## Functions
 ```ruby
