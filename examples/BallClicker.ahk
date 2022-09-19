@@ -108,9 +108,6 @@ loop {
 
 return
 
-guiclose:
-exitapp
-
 
 
 class wallClass {
