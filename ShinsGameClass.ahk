@@ -146,8 +146,7 @@ class ShinsGameClass {
 		OnMessage(0x5,this.WM_SIZE.Bind(this))
 		OnMessage(0x2A3,this.WM_MOUSELEAVE.Bind(this))
 		OnMessage(0x232,this.WM_EXITSIZEMOVE.Bind(this))
-		
-		
+		OnMessage(0x18,this.WM_SHOWWINDOW.Bind(this))
 	}
 	
 	
@@ -969,5 +968,9 @@ class ShinsGameClass {
 			NumPut(this.height,newSize,4,"uint")
 			DllCall(this.vTable(this.renderTarget,58),"Ptr",this.renderTarget,"ptr",&newsize)
 		}
+	}
+	WM_SHOWWINDOW(a) {
+		if (a=0)
+			exitapp
 	}
 }
