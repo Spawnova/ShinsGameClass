@@ -60,7 +60,7 @@ class ShinsGameClass {
 		this.gdiplusToken := token
 		this._guid("{06152247-6f50-465a-9245-118bfd3b6007}",clsidFactory)
 		this._guid("{b859ee5a-d838-4b5b-a2e8-1adc7d93db48}",clsidwFactory)
-		gui %guiID%: +hwndhwnd +resize
+		gui %guiID%: +hwndhwnd
 		
 		if (x = 0 and y = 0)
 			gui %guiID%:show,w%width% h%height%, % titleName
