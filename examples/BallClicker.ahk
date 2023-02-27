@@ -1,5 +1,7 @@
-#include ShinsGameClass.ahk
-setbatchlines,-1 ;VERY important for stable fps
+;#include <ShinsGameClass>  ;if the class if in your library folder you can use this
+;#include ShinsGameClass.ahk ;if the class is in your working directory you can use this
+#include ../ShinsGameClass.ahk
+setbatchlines,-1 ;this is necessary for vsync to work
 
 boxSize := 128 ;walls will be 128x128 pixels
 boxWidth := 10 ;10 wall columns
