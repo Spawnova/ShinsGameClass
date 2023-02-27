@@ -1,11 +1,12 @@
 ;Direct2d game class by Spawnova (9/19/2022)
-;https://github.com/Spawnova/ShinsOverlayClass
+;https://github.com/Spawnova/ShinsGameClass
 ;
 ;I'm not a professional programmer, I do this for fun, if it doesn't work for you I can try and help
 ;but I can't promise I will be able to solve the issue
 ;
 ;Special thanks to teadrinker for helping me understand some 64bit param structures! -> https://www.autohotkey.com/boards/viewtopic.php?f=76&t=105420
 
+#Requires AutoHotkey v1.1.27+
 
 class ShinsGameClass {
 
@@ -18,20 +19,19 @@ class ShinsGameClass {
 	;guiID						:		name of the ahk gui id for the game window
 	
 	__New(x,y,width,height,titleName:="Game Title",vsync:=1,guiID:="ShinsGameClass") {
-		
 
 		;[input variables] you can change these to affect the way the script behaves
 		
 		this.interpolationMode := 1 ;0 = nearestNeighbor, 1 = linear ;affects DrawImage() scaling 
-	
+		this.data := [] 			;reserved name for general data storage
 	
 	
 		;[output variables] you can read these to get extra info, DO NOT MODIFY THESE
 		
-		this.x := x							;overlay x position OR title of window to attach to
-		this.y := y							;overlay y position OR attach to client area
-		this.width := width					;overlay width OR attached overlay only drawn when window is in foreground
-		this.height := height				;overlay height
+		this.x := x := (x=0?(a_screenwidth/2)-(width/2):x)		;window x position
+		this.y := y := (y=0?(a_screenheight/2)-(height/2):y)		;window y position
+		this.width := width										;window width
+		this.height := height									;window height
 		
 	
 		;#############################
@@ -50,9 +50,16 @@ class ShinsGameClass {
 		this.mouseInClient := 0
 		this.fps := 0
 		this.frames := 0
-		this.nextFrameCheck := a_tickcount + 1000
+		this.frameSum := 0
+		this.deltaTime := 0
+		this.deltaLast := 0
+		this.deltaTotal := 0
+		this.gameSpeed := 1
+		this.timeScale := 0
+		this.title := titleName
 		
-		this._cacheImage := this.mcode("VlOD7AiLRCQgD69EJBzB4AKFwA+OmgAAANl8JAaLVCQYi0wkFI00EA+3RCQGgMwMZolEJASNdgAPtloDMcCA+/8Pk8CDwgSDwQSJBCQPtkL92wQkiQQk2wQkD7ZC/NjJiQQk2wQkD7ZC/tjKiQQk2wQk3svZytlsJATfHCTZbCQGD7cEJIhB/NlsJATfHCTZbCQGD7cEJIhB/dlsJATfHCTZbCQGiFn/D7cEJIhB/jnWdYWDxAi4AQAAAFtew5CQ|RQ+vwUHB4AJFhcB+f0GD6AFBwegCTo1MggRmDx9EAABED7ZCAzHAZg/v22YP78lmD+/AZg/v0kGA+P8Pk8BIg8IESIPBBPMPKtgPtkL98w8qyA+2QvzzDyrAD7ZC/kSIQf/zDyrQ8w9Zy/MPWcPzD1nT8w8swohB/PMPLMGIQf3zDyzAiEH+STnRdZS4AQAAAMOQkJCQkJCQkJCQkJCQkA==")
+		this._cacheImage := this.mcode("VVdWMfZTg+wMi0QkLA+vRCQoi1QkMMHgAoXAfmSLTCQki1wkIA+26gHIiUQkCGaQD7Z5A4PDBIPBBIn4D7bwD7ZB/g+vxpn3/YkEJA+2Qf0Pr8aZ9/2JRCQED7ZB/A+vxpn3/Q+2FCSIU/wPtlQkBIhT/YhD/on4iEP/OUwkCHWvg8QMifBbXl9dw5CQkJCQ|V1ZTRTHbRItUJEBFD6/BRo0MhQAAAABFhcl+YUGD6QFFD7bSSYnQQcHpAkqNdIoERQ+2WANBD7ZAAkmDwARIg8EEQQ+vw5lB9/qJx0EPtkD9QQ+vw5lB9/pBicFBD7ZA/ECIefxEiEn9QQ+vw0SIWf+ZQff6iEH+TDnGdbNEidhbXl/DkJCQkJCQkJCQkJCQ")
+		
 		this.LoadLib("d2d1","dwrite","dwmapi","gdiplus")
 		VarSetCapacity(gsi, 24, 0)
 		NumPut(1,gsi,0,"uint")
@@ -60,12 +67,10 @@ class ShinsGameClass {
 		this.gdiplusToken := token
 		this._guid("{06152247-6f50-465a-9245-118bfd3b6007}",clsidFactory)
 		this._guid("{b859ee5a-d838-4b5b-a2e8-1adc7d93db48}",clsidwFactory)
-		gui %guiID%: +hwndhwnd
+		gui %guiID%: +hwndhwnd -DPIScale ;+resize
 		
-		if (x = 0 and y = 0)
-			gui %guiID%:show,w%width% h%height%, % titleName
-		else
-			gui %guiID%:show,x%x% y%y% w%width% h%height%, % titleName
+
+		gui %guiID%:show,x%x% y%y% w%width% h%height%, % titleName
 			
 		this.hwnd := hwnd
 
@@ -78,18 +83,13 @@ class ShinsGameClass {
 		this.colPtr := this.SetVarCapacity("_colPtr",64)
 		this.clrPtr := this.SetVarCapacity("_clrPtr",64)
 		if (DllCall("d2d1\D2D1CreateFactory","uint",1,"Ptr",&clsidFactory,"uint*",0,"Ptr*",factory) != 0) {
-			this.Err("Problem creating factory","overlay will not function")
+			this.Err("Problem creating factory","window will not function")
 			return
 		}	
 		this.factory := factory
 		NumPut(1,this.tBufferPtr,16,"float")
 		if (DllCall(this.vTable(this.factory,11),"ptr",this.factory,"ptr",this.tBufferPtr,"ptr",0,"uint",0,"ptr*",stroke) != 0) {
-			this.Err("Problem creating stroke","overlay will not function")
-			return
-		}
-		NumPut(1,this.tBufferPtr,16,"float")
-		if (DllCall(this.vTable(this.factory,11),"ptr",this.factory,"ptr",this.tBufferPtr,"ptr",0,"uint",0,"ptr*",stroke) != 0) {
-			this.Err("Problem creating stroke","overlay will not function")
+			this.Err("Problem creating stroke","window will not function")
 			return
 		}
 		this.stroke := stroke
@@ -98,7 +98,7 @@ class ShinsGameClass {
 		NumPut(2,this.tBufferPtr,12,"uint")
 		NumPut(1,this.tBufferPtr,16,"float")
 		if (DllCall(this.vTable(this.factory,11),"ptr",this.factory,"ptr",this.tBufferPtr,"ptr",0,"uint",0,"ptr*",stroke) != 0) {
-			this.Err("Problem creating rounded stroke","overlay will not function")
+			this.Err("Problem creating rounded stroke","window will not function")
 			return
 		}
 		this.strokeRounded := stroke
@@ -110,21 +110,21 @@ class ShinsGameClass {
 		NumPut(height,this.hrtPtr,a_ptrsize+4,"uint")
 		NumPut((vsync?0:2),this.hrtPtr,a_ptrsize+8,"uint")
 		if (DllCall(this.vTable(this.factory,14),"Ptr",this.factory,"Ptr",this.rtPtr,"ptr",this.hrtPtr,"Ptr*",renderTarget) != 0) {
-			this.Err("Problem creating renderTarget","overlay will not function")
+			this.Err("Problem creating renderTarget","window will not function")
 			return
 		}
 		this.renderTarget := renderTarget
 		NumPut(1,this.matrixPtr,0,"float")
 		this.SetIdentity(4)
 		if (DllCall(this.vTable(this.renderTarget,8),"Ptr",this.renderTarget,"Ptr",this.colPtr,"Ptr",this.matrixPtr,"Ptr*",brush) != 0) {
-			this.Err("Problem creating brush","overlay will not function")
+			this.Err("Problem creating brush","window will not function")
 			return
 		}
 		this.SetPosition(,,width,height)
 		this.brush := brush
 		DllCall(this.vTable(this.renderTarget,32),"Ptr",this.renderTarget,"Uint",1)
 		if (DllCall("dwrite\DWriteCreateFactory","uint",0,"Ptr",&clsidwFactory,"Ptr*",wFactory) != 0) {
-			this.Err("Problem creating writeFactory","overlay will not function")
+			this.Err("Problem creating writeFactory","window will not function")
 			return
 		}
 		this.wFactory := wFactory
@@ -147,6 +147,11 @@ class ShinsGameClass {
 		OnMessage(0x2A3,this.WM_MOUSELEAVE.Bind(this))
 		OnMessage(0x232,this.WM_EXITSIZEMOVE.Bind(this))
 		OnMessage(0x18,this.WM_SHOWWINDOW.Bind(this))
+		
+		DllCall("QueryPerformanceFrequency", "Int64*", freq)
+		this.deltaFreq := freq
+		DllCall("QueryPerformanceCounter", "Int64*", ms)
+		this.deltaLast := ms
 	}
 	
 	
@@ -155,18 +160,27 @@ class ShinsGameClass {
 	;
 	;return				;				True (for now)
 	;
-	;Notes				;				Must always call EndDraw to finish drawing and update the overlay
+	;Notes				;				Must always call EndDraw to finish drawing and update the window
 	
 	BeginDraw() {
-		if (a_tickcount > this.nextFrameCheck) {
-			this.fps := this.frames
-			this.nextFrameCheck := a_tickcount+1000
-			this.frames := 0
-		}
-		this.frames++
+		
 		DllCall(this.vTable(this.renderTarget,48),"Ptr",this.renderTarget)
 		DllCall(this.vTable(this.renderTarget,47),"Ptr",this.renderTarget,"Ptr",this.clrPtr)
 		
+		DllCall("QueryPerformanceCounter", "Int64*", ms)
+		this.deltaTime := (ms-this.deltaLast) / this.deltaFreq ;* 1000
+		this.deltaLast := ms
+		
+		this.timeScale := this.deltaTime * this.gameSpeed
+		
+		this.deltaTotal += this.deltaTime
+		this.frameSum += this.deltaTime
+		if (this.frameSum > 0.999999) {
+			this.frameSum := 0
+			this.fps := this.frames
+			this.frames := 0
+		}
+		this.frames++
 
 		this.lbutton := this.clicks & 0x1
 		this.mbutton := (this.clicks >>1) & 0x1
@@ -181,7 +195,7 @@ class ShinsGameClass {
 	;
 	;return				;				Void
 	;
-	;Notes				;				Must always call EndDraw to finish drawing and update the overlay
+	;Notes				;				Must always call EndDraw to finish drawing and update the window
 	
 	EndDraw() {
 	
@@ -221,19 +235,25 @@ class ShinsGameClass {
 	;alpha				:				Image transparency, float between 0 and 1
 	;drawCentered		:				Draw the image centered on dstX/dstY, otherwise dstX/dstY will be the top left of the image
 	;rotation			:				Image rotation in degrees (0-360)
+	;rotationOffsetX	:				X offset to base rotations on (defaults to center x)
+	;rotationOffsetY	:				Y offset to base rotations on (defaults to center y)
 	;
 	;return				;				Void
 	
-	DrawImage(image,dstX,dstY,dstW:=0,dstH:=0,srcX:=0,srcY:=0,srcW:=0,srcH:=0,alpha:=1,drawCentered:=0,rotation:=0) {
+	DrawImage(image,dstX,dstY,dstW:=0,dstH:=0,srcX:=0,srcY:=0,srcW:=0,srcH:=0,alpha:=1,drawCentered:=0,rotation:=0,rotOffX:=0,rotOffY:=0) {
 		if (!i := this.imageCache[image]) {
 			i := this.cacheImage(image)
 		}
-		x := dstX-(drawCentered?i.w/2:0)
-		y := dstY-(drawCentered?i.h/2:0)
+		if (dstW <= 0)
+			dstW := i.w
+		if (dstH <= 0)
+			dstH := i.h
+		x := dstX-(drawCentered?dstW/2:0)
+		y := dstY-(drawCentered?dstH/2:0)
 		NumPut(x,this.rect1Ptr,0,"float")
 		NumPut(y,this.rect1Ptr,4,"float")
-		NumPut(x + (dstW=0?i.w:dstW),this.rect1Ptr,8,"float")
-		NumPut(y + (dstH=0?i.h:dstH),this.rect1Ptr,12,"float")
+		NumPut(x + dstW,this.rect1Ptr,8,"float")
+		NumPut(y + dstH,this.rect1Ptr,12,"float")
 		NumPut(srcX,this.rect2Ptr,0,"float")
 		NumPut(srcY,this.rect2Ptr,4,"float")
 		NumPut(srcX + (srcW=0?i.w:srcW),this.rect2Ptr,8,"float")
@@ -241,11 +261,17 @@ class ShinsGameClass {
 		
 		if (rotation != 0) {
 			if (this.bits) {
-				NumPut(dstX+(dstW/2),this.tBufferPtr,0,"float")
-				NumPut(dstY+(dstH/2),this.tBufferPtr,4,"float")
+				if (rotOffX or rotOffY) {
+					NumPut(dstX+rotOffX,this.tBufferPtr,0,"float")
+					NumPut(dstY+rotOffY,this.tBufferPtr,4,"float")
+					tooltip k
+				} else {
+					NumPut(dstX+(drawCentered?0:dstW/2),this.tBufferPtr,0,"float")
+					NumPut(dstY+(drawCentered?0:dstH/2),this.tBufferPtr,4,"float")
+				}
 				DllCall("d2d1\D2D1MakeRotateMatrix","float",rotation,"double",NumGet(this.tBufferPtr,"double"),"ptr",this.matrixPtr)
 			} else {
-				DllCall("d2d1\D2D1MakeRotateMatrix","float",rotation,"float",dstX+(dstW/2),"float",dstY+(dstH/2),"ptr",this.matrixPtr)
+				DllCall("d2d1\D2D1MakeRotateMatrix","float",rotation,"float",dstX+(drawCentered?0:dstW/2),"float",dstY+(drawCentered?0:dstH/2),"ptr",this.matrixPtr)
 			}
 			DllCall(this.vTable(this.renderTarget,30),"ptr",this.renderTarget,"ptr",this.matrixPtr)
 			DllCall(this.vTable(this.renderTarget,26),"ptr",this.renderTarget,"ptr",i.p,"ptr",this.rect1Ptr,"float",alpha,"uint",this.interpolationMode,"ptr",this.rect2Ptr)
@@ -273,10 +299,12 @@ class ShinsGameClass {
 	;									DropShadow ........	ds[hex color]			: Example > dsFF000000		(Default: DISABLED)
 	;									DropShadowXOffset . dsx[number]				: Example > dsx2			(Default: 1)
 	;									DropShadowYOffset . dsy[number]				: Example > dsy2			(Default: 1)
+	;									Outline ........... ol[hex color]			: Example > olFF000000		(Default: DISABLED)
 	;
 	;return				;				Void
 	
 	DrawText(text,x,y,size:=18,color:=0xFFFFFFFF,fontName:="Arial",extraOptions:="") {
+		local
 		if (!RegExMatch(extraOptions,"w([\d\.]+)",w))
 			w1 := this.width
 		if (!RegExMatch(extraOptions,"h([\d\.]+)",h))
@@ -294,6 +322,8 @@ class ShinsGameClass {
 			if (!RegExMatch(extraOptions,"dsy([\d\.]+)",dsy))
 				dsy1 := 1
 			this.DrawTextShadow(p,text,x+dsx1,y+dsy1,w1,h1,"0x" ds1)
+		} else if (RegExMatch(extraOptions,"ol([a-fA-F\d]+)",ol)) {
+			this.DrawTextOutline(p,text,x,y,w1,h1,"0x" ol1)
 		}
 		
 		this.SetBrushColor(color)
@@ -589,8 +619,13 @@ class ShinsGameClass {
 					DllCall(this.vTable(sink,9),"ptr",sink)
 				}
 				
-				if (DllCall(this.vTable(this.renderTarget,22),"Ptr",this.renderTarget,"Ptr",pGeom,"ptr",this.brush,"float",thickness,"ptr",(rounded?this.strokeRounded:this.stroke)) = 0)
+				if (DllCall(this.vTable(this.renderTarget,22),"Ptr",this.renderTarget,"Ptr",pGeom,"ptr",this.brush,"float",thickness,"ptr",(rounded?this.strokeRounded:this.stroke)) = 0) {
+					DllCall(this.vTable(sink,2),"ptr",sink)
+					DllCall(this.vTable(pGeom,2),"Ptr",pGeom)
 					return 1
+				}
+				DllCall(this.vTable(sink,2),"ptr",sink)
+				DllCall(this.vTable(pGeom,2),"Ptr",pGeom)
 			}
 		}
 		
@@ -636,8 +671,14 @@ class ShinsGameClass {
 					DllCall(this.vTable(sink,9),"ptr",sink)
 				}
 				
-				if (DllCall(this.vTable(this.renderTarget,23),"Ptr",this.renderTarget,"Ptr",pGeom,"ptr",this.brush,"ptr",0) = 0)
+				if (DllCall(this.vTable(this.renderTarget,23),"Ptr",this.renderTarget,"Ptr",pGeom,"ptr",this.brush,"ptr",0) = 0) {
+					DllCall(this.vTable(sink,2),"ptr",sink)
+					DllCall(this.vTable(pGeom,2),"Ptr",pGeom)
 					return 1
+				}
+				DllCall(this.vTable(sink,2),"ptr",sink)
+				DllCall(this.vTable(pGeom,2),"Ptr",pGeom)
+				
 			}
 		}
 		
@@ -651,8 +692,8 @@ class ShinsGameClass {
 	;
 	;x					:				X position to move the window to (screen space)
 	;y					:				Y position to move the window to (screen space)
-	;w					:				New Width (only applies when not attached)
-	;h					:				New Height (only applies when not attached)
+	;w					:				New Width
+	;h					:				New Height
 	;
 	;return				;				Void
 	;
@@ -665,8 +706,11 @@ class ShinsGameClass {
 			NumPut(this.height := h,newSize,4,"uint")
 			DllCall(this.vTable(this.renderTarget,58),"Ptr",this.renderTarget,"ptr",&newsize)
 		}
-		if (x != -1 and y != -1)
+		if (x != -1 and y != -1) {
+			this.x := x
+			this.y := y
 			DllCall("MoveWindow","Ptr",this.hwnd,"int",x,"int",y,"int",this.width,"int",this.height,"char",1)
+		}
 	}
 	
 	
@@ -714,7 +758,7 @@ class ShinsGameClass {
 	;####################################################################################################################################################################################################################################
 	;Clear
 	;
-	;notes						:			Clears the overlay, essentially the same as running BegindDraw followed by EndDraw
+	;notes						:			Clears the screen, essentially the same as running BegindDraw followed by EndDraw
 	
 	Clear() {
 		DllCall(this.vTable(this.renderTarget,48),"Ptr",this.renderTarget)
@@ -796,6 +840,18 @@ class ShinsGameClass {
 		NumPut(y+h,this.tBufferPtr,12,"float")
 		DllCall(this.vTable(this.renderTarget,27),"ptr",this.renderTarget,"wstr",text,"uint",strlen(text),"ptr",p,"ptr",this.tBufferPtr,"ptr",this.brush,"uint",0,"uint",0)
 	}
+	DrawTextOutline(p,text,x,y,w,h,color) {
+		static o := [[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1],[0,-1],[1,-1]]
+		this.SetBrushColor(color)
+		for k,v in o
+		{
+			NumPut(x+v[1],this.tBufferPtr,0,"float")
+			NumPut(y+v[2],this.tBufferPtr,4,"float")
+			NumPut(x+w+v[1],this.tBufferPtr,8,"float")
+			NumPut(y+h+v[2],this.tBufferPtr,12,"float")
+			DllCall(this.vTable(this.renderTarget,27),"ptr",this.renderTarget,"wstr",text,"uint",strlen(text),"ptr",p,"ptr",this.tBufferPtr,"ptr",this.brush,"uint",0,"uint",0)
+		}
+	}
 	Err(str*) {
 		s := ""
 		for k,v in str
@@ -854,7 +910,7 @@ class ShinsGameClass {
 		DllCall("Gdiplus\GdipBitmapLockBits", "Ptr", bm, "Ptr", &r, "uint", 3, "int", 0x26200A, "Ptr", &bmdata)
 		scan := NumGet(bmdata, 16, "Ptr")
 		p := DllCall("GlobalAlloc", "uint", 0x40, "ptr", 16+((w*h)*4), "ptr")
-		DllCall(this._cacheImage,"Ptr",p,"Ptr",scan,"int",w,"int",h)
+		DllCall(this._cacheImage,"Ptr",p,"Ptr",scan,"int",w,"int",h,"uchar",255)
 		DllCall("Gdiplus\GdipBitmapUnlockBits", "Ptr", bm, "Ptr", &bmdata)
 		DllCall("gdiplus\GdipDisposeImage", "ptr", bm)
 		VarSetCapacity(props,64,0)
