@@ -106,7 +106,7 @@ class ShinsGameClass {
 		NumPut(96,this.rtPtr,12,"float")
 		NumPut(96,this.rtPtr,16,"float")
 		NumPut(hwnd,this.hrtPtr,0,"Ptr")
-		NumPut(width_orForeground,this.hrtPtr,a_ptrsize,"uint")
+		NumPut(width,this.hrtPtr,a_ptrsize,"uint")
 		NumPut(height,this.hrtPtr,a_ptrsize+4,"uint")
 		NumPut((vsync?0:2),this.hrtPtr,a_ptrsize+8,"uint")
 		if (DllCall(this.vTable(this.factory,14),"Ptr",this.factory,"Ptr",this.rtPtr,"ptr",this.hrtPtr,"Ptr*",renderTarget) != 0) {
