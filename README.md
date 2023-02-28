@@ -6,7 +6,7 @@ Supports 32bit and 64bit for systems running windows 7+ including the newest win
 
 [![Video](https://img.youtube.com/vi/Gg4ywjlsauY/default.jpg)](https://www.youtube.com/watch?v=Gg4ywjlsauY)
 
-## Functions
+## Functions (May not always be up to date)
 ```ruby
 #BeginDraw................Begins the drawing process, MUST ALWAYS start with BeginDraw(), if attached to window returns 1 if window is available, 0 otherwise
 BeginDraw()
