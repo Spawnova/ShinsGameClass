@@ -264,7 +264,6 @@ class ShinsGameClass {
 				if (rotOffX or rotOffY) {
 					NumPut(dstX+rotOffX,this.tBufferPtr,0,"float")
 					NumPut(dstY+rotOffY,this.tBufferPtr,4,"float")
-					tooltip k
 				} else {
 					NumPut(dstX+(drawCentered?0:dstW/2),this.tBufferPtr,0,"float")
 					NumPut(dstY+(drawCentered?0:dstH/2),this.tBufferPtr,4,"float")
