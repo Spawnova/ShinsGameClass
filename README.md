@@ -1,5 +1,5 @@
 # ShinsGameClass
-A direct2d game/graphic class for <ins>AutoHotkey **V1.1**</ins>, made to be user friendly and fast.
+A direct2d game/graphic class for <ins>AutoHotkey V1.1</ins> and <ins>AutoHotkey V2</ins>, made to be user friendly and fast.
 Supports 32bit and 64bit for systems running windows 7+ including the newest windows 11.
 
 # YouTube simple overview and examples
@@ -77,9 +77,9 @@ SetClearColor(color:=0x222222)
 
 ## Notes
 
-* **Only for AHK V1.1, V2 is not supported.**
+* **AHK V2 is now supported!**
 *
-* I've only tested on my end and can confirm it works for me using 32/64 bit AHK_L (AHK V1.1) on Windows 10.
+* I've only tested on my end and can confirm it works for me using 32/64 bit AHK_L (AHK V1.1) and AHK V2 on Windows 10.
 * If it doesn't work for you let me know, I may be able to help, or maybe not, just depends.
 
 ### Donations
