@@ -24,7 +24,8 @@ class ShinsGameClass {
 		
 		this.interpolationMode := 1 ;0 = nearestNeighbor, 1 = linear ;affects DrawImage() scaling 
 		this.data := Map() 			;reserved name for general data storage
-	
+		this.minWidth := 1
+		this.minHeight := 1
 	
 		;[output variables] you can read these to get extra info, DO NOT MODIFY THESE
 		
