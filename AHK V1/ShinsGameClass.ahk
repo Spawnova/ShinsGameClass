@@ -24,7 +24,8 @@ class ShinsGameClass {
 		
 		this.interpolationMode := 1 ;0 = nearestNeighbor, 1 = linear ;affects DrawImage() scaling 
 		this.data := [] 			;reserved name for general data storage
-	
+		this.minWidth := 1			;Minimum window width
+		this.minHeight := 1			;Minimum window height
 	
 		;[output variables] you can read these to get extra info, DO NOT MODIFY THESE
 		
@@ -57,6 +58,10 @@ class ShinsGameClass {
 		this.gameSpeed := 1
 		this.timeScale := 0
 		this.title := titleName
+		this.newWidth := width
+		this.newHeight := height
+		this.drawing := 0
+		this.sizeChangeReady := 0
 		
 		this._cacheImage := this.mcode("VVdWMfZTg+wMi0QkLA+vRCQoi1QkMMHgAoXAfmSLTCQki1wkIA+26gHIiUQkCGaQD7Z5A4PDBIPBBIn4D7bwD7ZB/g+vxpn3/YkEJA+2Qf0Pr8aZ9/2JRCQED7ZB/A+vxpn3/Q+2FCSIU/wPtlQkBIhT/YhD/on4iEP/OUwkCHWvg8QMifBbXl9dw5CQkJCQ|V1ZTRTHbRItUJEBFD6/BRo0MhQAAAABFhcl+YUGD6QFFD7bSSYnQQcHpAkqNdIoERQ+2WANBD7ZAAkmDwARIg8EEQQ+vw5lB9/qJx0EPtkD9QQ+vw5lB9/pBicFBD7ZA/ECIefxEiEn9QQ+vw0SIWf+ZQff6iEH+TDnGdbNEidhbXl/DkJCQkJCQkJCQkJCQ")
 		
@@ -68,9 +73,6 @@ class ShinsGameClass {
 		this._guid("{06152247-6f50-465a-9245-118bfd3b6007}",clsidFactory)
 		this._guid("{b859ee5a-d838-4b5b-a2e8-1adc7d93db48}",clsidwFactory)
 		gui %guiID%: +hwndhwnd -DPIScale ;+resize
-		
-
-		gui %guiID%:show,x%x% y%y% w%width% h%height%, % titleName
 			
 		this.hwnd := hwnd
 
@@ -82,6 +84,7 @@ class ShinsGameClass {
 		this.matrixPtr := this.SetVarCapacity("_matrix",64)
 		this.colPtr := this.SetVarCapacity("_colPtr",64)
 		this.clrPtr := this.SetVarCapacity("_clrPtr",64)
+		this.sizeBufferPtr := this.SetVarCapacity("_szBufferPtr",64)
 		if (DllCall("d2d1\D2D1CreateFactory","uint",1,"Ptr",&clsidFactory,"uint*",0,"Ptr*",factory) != 0) {
 			this.Err("Problem creating factory","window will not function")
 			return
@@ -135,6 +138,8 @@ class ShinsGameClass {
 		DllCall(this.vTable(this.renderTarget,47),"Ptr",this.renderTarget,"Ptr",this.clrPtr)
 		DllCall(this.vTable(this.renderTarget,49),"Ptr",this.renderTarget,"int64*",tag1,"int64*",tag2)
 		
+		gui %guiID%:show,x%x% y%y% w%width% h%height%, % titleName
+		
 		OnMessage(0x200,this.WM_MOUSEMOVE.Bind(this))
 		OnMessage(0x201,this.WM_LBUTTONDOWN.Bind(this))
 		OnMessage(0x203,this.WM_LBUTTONDOWN.Bind(this))
@@ -158,14 +163,23 @@ class ShinsGameClass {
 	;####################################################################################################################################################################################################################################
 	;BeginDraw
 	;
+	;clear				:				Clear the previous frame
+	;
 	;return				;				True (for now)
 	;
 	;Notes				;				Must always call EndDraw to finish drawing and update the window
 	
-	BeginDraw() {
+	BeginDraw(clear:=1) {
+		local
+		
+		if (this.sizeChangeReady) {
+			if (this.SetPosition(-1,-1,this.newWidth,this.newHeight))
+				this.sizeChangeReady := 0
+		}
 		
 		DllCall(this.vTable(this.renderTarget,48),"Ptr",this.renderTarget)
-		DllCall(this.vTable(this.renderTarget,47),"Ptr",this.renderTarget,"Ptr",this.clrPtr)
+		if (clear)
+			DllCall(this.vTable(this.renderTarget,47),"Ptr",this.renderTarget,"Ptr",this.clrPtr)
 		
 		DllCall("QueryPerformanceCounter", "Int64*", ms)
 		this.deltaTime := (ms-this.deltaLast) / this.deltaFreq ;* 1000
@@ -186,6 +200,7 @@ class ShinsGameClass {
 		this.mbutton := (this.clicks >>1) & 0x1
 		this.rbutton := (this.clicks >>2) & 0x1
 		this.clicks := 0
+		this.drawing := 1
 		return 1
 	}
 	
@@ -198,8 +213,11 @@ class ShinsGameClass {
 	;Notes				;				Must always call EndDraw to finish drawing and update the window
 	
 	EndDraw() {
-	
+		local
+		
 		DllCall(this.vTable(this.renderTarget,49),"Ptr",this.renderTarget,"int64*",tag1,"int64*",tag2)
+		this.drawing := 0
+		
 		if (this.iconic)
 			sleep 10
 	}
@@ -213,9 +231,10 @@ class ShinsGameClass {
 	;Notes				;				The color that is used to clear the backgroun
 	
 	SetClearColor(color:=0x222222) {
+		local
 		NumPut(((color & 0xFF0000)>>16)/255,this.clrPtr,0,"float")
 		NumPut(((color & 0xFF00)>>8)/255,this.clrPtr,4,"float")
-		NumPut(((color & 0xFF))/255,this.clrPtr,8,"float")
+		NumPut((color & 0xFF)/255,this.clrPtr,8,"float")
 		NumPut(1,this.clrPtr,12,"float")
 		DllCall(this.vTable(this.brush,8),"Ptr",this.brush,"Ptr",this.clrPtr)
 	}
@@ -241,6 +260,7 @@ class ShinsGameClass {
 	;return				;				Void
 	
 	DrawImage(image,dstX,dstY,dstW:=0,dstH:=0,srcX:=0,srcY:=0,srcW:=0,srcH:=0,alpha:=1,drawCentered:=0,rotation:=0,rotOffX:=0,rotOffY:=0) {
+		local
 		if (!i := this.imageCache[image]) {
 			i := this.cacheImage(image)
 		}
@@ -330,8 +350,88 @@ class ShinsGameClass {
 		NumPut(y,this.tBufferPtr,4,"float")
 		NumPut(x+w1,this.tBufferPtr,8,"float")
 		NumPut(y+h1,this.tBufferPtr,12,"float")
-		
 		DllCall(this.vTable(this.renderTarget,27),"ptr",this.renderTarget,"wstr",text,"uint",strlen(text),"ptr",p,"ptr",this.tBufferPtr,"ptr",this.brush,"uint",0,"uint",0)
+	}
+	
+	
+	;####################################################################################################################################################################################################################################
+	;GetTextMetrics
+	;
+	;text				:				The text to get the metrics of
+	;size				:				Font size to measure with
+	;fontName			:				Name of the font to use
+	;maxWidth			:				Max width (smaller width may cause wrapping)
+	;maxHeight			:				Max Height
+	;
+	;return				;				An array containing width, height and line count of the string
+	;
+	;Notes				;				Used to measure a string before drawing it
+	
+	GetTextMetrics(text,size,fontName,maxWidth:=5000,maxHeight:=5000) {
+		local
+		if (!p := this.fonts[fontName size]) {
+			p := this.CacheFont(fontName,size)
+		}
+		DllCall(this.vTable(this.wFactory,18),"ptr",this.wFactory,"WStr",text,"uint",strlen(text),"Ptr",p,"float",maxWidth,"float",maxHeight,"Ptr*",layout)
+		DllCall(this.vTable(layout,60),"ptr",layout,"ptr",this.tBufferPtr,"uint")
+		
+		w := numget(this.tBufferPtr,8,"float")
+		h := numget(this.tBufferPtr,16,"float")
+		
+		return {w:w,width:w,h:h,height:h,lines:numget(this.tBufferPtr,32,"uint")}
+		
+	}
+	
+	
+	;####################################################################################################################################################################################################################################
+	;SetTextRenderParams
+	;
+	;gamma				:				Gamma value ................. (1 > 256)
+	;contrast			:				Contrast value .............. (0.0 > 1.0)
+	;clearType			:				Clear type level ............ (0.0 > 1.0)
+	;pixelGeom			:				
+	;									0 - DWRITE_PIXEL_GEOMETRY_FLAT
+    ;									1 - DWRITE_PIXEL_GEOMETRY_RGB
+    ;									2 - DWRITE_PIXEL_GEOMETRY_BGR
+	;
+	;renderMode			:				
+    ; 									0 - DWRITE_RENDERING_MODE_DEFAULT
+    ; 									1 - DWRITE_RENDERING_MODE_ALIASED
+    ; 									2 - DWRITE_RENDERING_MODE_GDI_CLASSIC
+    ; 									3 - DWRITE_RENDERING_MODE_GDI_NATURAL
+    ; 									4 - DWRITE_RENDERING_MODE_NATURAL
+    ; 									5 - DWRITE_RENDERING_MODE_NATURAL_SYMMETRIC
+    ; 									6 - DWRITE_RENDERING_MODE_OUTLINE
+	;									7 - DWRITE_RENDERING_MODE_CLEARTYPE_GDI_CLASSIC
+	;									8 - DWRITE_RENDERING_MODE_CLEARTYPE_GDI_NATURAL
+	;									9 - DWRITE_RENDERING_MODE_CLEARTYPE_NATURAL
+	;									10 - DWRITE_RENDERING_MODE_CLEARTYPE_NATURAL_SYMMETRIC
+	;
+	;return				;				Void
+	;
+	;Notes				;				Used to affect how text is rendered
+	
+	SetTextRenderParams(gamma:=1,contrast:=0,cleartype:=1,pixelGeom:=0,renderMode:=0) {
+		local
+		DllCall(this.vTable(this.wFactory,12),"ptr",this.wFactory,"Float",gamma,"Float",contrast,"Float",cleartype,"Uint",pixelGeom,"Uint",renderMode,"Ptr*",params) "`n" params
+		DllCall(this.vTable(this.renderTarget,36),"Ptr",this.renderTarget,"Ptr",params)
+	}
+	
+	
+	;####################################################################################################################################################################################################################################
+	;InstallFont
+	;
+	;fontPath			:				A string containing a path to the font file
+	;
+	;return				;				Number of fonts added
+	;
+	;Notes				;				Allows using custom fonts from a suported file (WARNING: Currently the fonts will be installed on the system
+	;									even after the program closes, private fonts seem to be incompatible with d2d)
+	;									Supported font extensions, .fon .fnt .ttf .ttc .fot .otf .mmm .pfb .pfm
+	;									May need to be called before instancing a class
+	
+	InstallFont(fontPath) {
+		return DllCall("Gdi32\AddFontResourceEx","Str",fontPath,"Uint",0x20,"Uint",0) ;FR_PRIVATE doesn't work, not sure why, a more in depth solution later
 	}
 	
 	
@@ -348,6 +448,7 @@ class ShinsGameClass {
 	;return				;				Void
 	
 	DrawEllipse(x, y, w, h, color, thickness:=1) {
+		local
 		this.SetBrushColor(color)
 		NumPut(x,this.tBufferPtr,0,"float")
 		NumPut(y,this.tBufferPtr,4,"float")
@@ -369,6 +470,7 @@ class ShinsGameClass {
 	;return				;				Void
 	
 	FillEllipse(x, y, w, h, color) {
+		local
 		this.SetBrushColor(color)
 		NumPut(x,this.tBufferPtr,0,"float")
 		NumPut(y,this.tBufferPtr,4,"float")
@@ -390,6 +492,7 @@ class ShinsGameClass {
 	;return				;				Void
 	
 	DrawCircle(x, y, radius, color, thickness:=1) {
+		local
 		this.SetBrushColor(color)
 		NumPut(x,this.tBufferPtr,0,"float")
 		NumPut(y,this.tBufferPtr,4,"float")
@@ -410,6 +513,7 @@ class ShinsGameClass {
 	;return				;				Void
 	
 	FillCircle(x, y, radius, color) {
+		local
 		this.SetBrushColor(color)
 		NumPut(x,this.tBufferPtr,0,"float")
 		NumPut(y,this.tBufferPtr,4,"float")
@@ -432,6 +536,7 @@ class ShinsGameClass {
 	;return				;				Void
 	
 	DrawRectangle(x, y, w, h, color, thickness:=1) {
+		local
 		this.SetBrushColor(color)
 		NumPut(x,this.tBufferPtr,0,"float")
 		NumPut(y,this.tBufferPtr,4,"float")
@@ -453,6 +558,7 @@ class ShinsGameClass {
 	;return				;				Void
 	
 	FillRectangle(x, y, w, h, color) {
+		local
 		this.SetBrushColor(color)
 		NumPut(x,this.tBufferPtr,0,"float")
 		NumPut(y,this.tBufferPtr,4,"float")
@@ -477,6 +583,7 @@ class ShinsGameClass {
 	;return				;				Void
 	
 	DrawRoundedRectangle(x, y, w, h, radiusX, radiusY, color, thickness:=1) {
+		local
 		this.SetBrushColor(color)
 		NumPut(x,this.tBufferPtr,0,"float")
 		NumPut(y,this.tBufferPtr,4,"float")
@@ -502,6 +609,7 @@ class ShinsGameClass {
 	;return				;				Void
 	
 	FillRoundedRectangle(x, y, w, h, radiusX, radiusY, color) {
+		local
 		this.SetBrushColor(color)
 		NumPut(x,this.tBufferPtr,0,"float")
 		NumPut(y,this.tBufferPtr,4,"float")
@@ -526,6 +634,7 @@ class ShinsGameClass {
 	;return				;				Void
 
 	DrawLine(x1,y1,x2,y2,color:=0xFFFFFFFF,thickness:=1,rounded:=0) {
+		local
 		this.SetBrushColor(color)
 		if (this.bits) {
 			NumPut(x1,this.tBufferPtr,0,"float")  ;Special thanks to teadrinker for helping me
@@ -551,6 +660,7 @@ class ShinsGameClass {
 	;return				;				1 on success; 0 otherwise
 
 	DrawLines(points,color,connect:=0,thickness:=1,rounded:=0) {
+		local
 		if (points.length() < 2)
 			return 0
 		lx := sx := points[1][1]
@@ -592,6 +702,7 @@ class ShinsGameClass {
 	;return				;				1 on success; 0 otherwise
 
 	DrawPolygon(points,color,thickness:=1,rounded:=0,xOffset:=0,yOffset:=0) {
+		local
 		if (points.length() < 3)
 			return 0
 		
@@ -644,6 +755,7 @@ class ShinsGameClass {
 	;return				;				1 on success; 0 otherwise
 
 	FillPolygon(points,color,xoffset:=0,yoffset:=0) {
+		local
 		if (points.length() < 3)
 			return 0
 		
@@ -694,22 +806,29 @@ class ShinsGameClass {
 	;w					:				New Width
 	;h					:				New Height
 	;
-	;return				;				Void
+	;return				;				1 on success, 0 otherwise
 	;
 	;notes				:				Only used when not attached to a window
 	
 	SetPosition(x:=-1,y:=-1,w:=0,h:=0) {
-		if (w > 0 and h > 0) {
+		local
+		move := 0
+		w := (w < this.minWidth ? this.minWidth : w)
+		h := (h < this.minHeight ? this.minHeight : h)
+		if (w > 0 and h > 0 and (w!=this.width or h!=this.height)) {
+			move := 1
 			VarSetCapacity(newSize,16)
 			NumPut(this.width := w,newSize,0,"uint")
 			NumPut(this.height := h,newSize,4,"uint")
-			DllCall(this.vTable(this.renderTarget,58),"Ptr",this.renderTarget,"ptr",&newsize)
+			if (DllCall(this.vTable(this.renderTarget,58),"Ptr",this.renderTarget,"ptr",&newsize) != 0)
+				return 0
 		}
 		if (x != -1 and y != -1) {
-			this.x := x
-			this.y := y
-			DllCall("MoveWindow","Ptr",this.hwnd,"int",x,"int",y,"int",this.width,"int",this.height,"char",1)
+			this.x := x, this.y := y, move := 1
 		}
+		if (move and DllCall("MoveWindow","Ptr",this.hwnd,"int",this.x,"int",this.y,"int",this.width,"int",this.height,"char",1) != 0)
+			return 0
+		return 1
 	}
 	
 	
@@ -723,6 +842,7 @@ class ShinsGameClass {
 	;return				;				Void
 	
 	GetImageDimensions(image,byref w, byref h) {
+		local
 		if (!i := this.imageCache[image]) {
 			i := this.cacheImage(image)
 		}
@@ -743,6 +863,7 @@ class ShinsGameClass {
 	;notes				:				Legacy function, may be useful in some situations though
 	
 	GetMousePos(byref x, byref y) {
+		local
 		if (!DllCall("GetCursorPos","ptr",this.tBufferPtr))
 			return 0
 		if (!DllCall("ScreenToClient","ptr",this.hwnd,"ptr",this.tBufferPtr))
@@ -760,6 +881,7 @@ class ShinsGameClass {
 	;notes						:			Clears the screen, essentially the same as running BegindDraw followed by EndDraw
 	
 	Clear() {
+		local
 		DllCall(this.vTable(this.renderTarget,48),"Ptr",this.renderTarget)
 		DllCall(this.vTable(this.renderTarget,47),"Ptr",this.renderTarget,"Ptr",this.clrPtr)
 		DllCall(this.vTable(this.renderTarget,49),"Ptr",this.renderTarget,"int64*",tag1,"int64*",tag2)
@@ -780,6 +902,7 @@ class ShinsGameClass {
 	
 	
 	GetDistance(x1,y1,x2,y2) {
+		local
 		x:=x1-x2
 		y:=y1-y2
 		return % sqrt((x*x) + (y*y))
@@ -840,6 +963,7 @@ class ShinsGameClass {
 		DllCall(this.vTable(this.renderTarget,27),"ptr",this.renderTarget,"wstr",text,"uint",strlen(text),"ptr",p,"ptr",this.tBufferPtr,"ptr",this.brush,"uint",0,"uint",0)
 	}
 	DrawTextOutline(p,text,x,y,w,h,color) {
+		local
 		static o := [[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1],[0,-1],[1,-1]]
 		this.SetBrushColor(color)
 		for k,v in o
@@ -852,12 +976,14 @@ class ShinsGameClass {
 		}
 	}
 	Err(str*) {
+		local
 		s := ""
 		for k,v in str
 			s .= (s = "" ? "" : "`n`n") v
 		msgbox,% 0x30 | 0x1000,% "Problem!",% s
 	}
 	LoadLib(lib*) {
+		local
 		for k,v in lib
 			if (!DllCall("GetModuleHandle", "str", v, "Ptr"))
 				DllCall("LoadLibrary", "Str", v) 
@@ -880,15 +1006,18 @@ class ShinsGameClass {
 		return NumGet(NumGet(a+0,0,"ptr"),p*a_ptrsize,"Ptr")
 	}
 	_guid(guidStr,byref clsid) {
+		local
 		VarSetCapacity(clsid,16)
 		DllCall("ole32\CLSIDFromString", "WStr", guidStr, "Ptr", &clsid)
 	}
 	SetVarCapacity(key,size,fill=0) {
+		local
 		this.SetCapacity(key,size)
 		DllCall("RtlFillMemory","Ptr",this.GetAddress(key),"Ptr",size,"uchar",fill)
 		return this.GetAddress(key)
 	}
 	CacheImage(image) {
+		local
 		if (this.imageCache.haskey(image))
 			return 1
 		if (image = "") {
@@ -931,6 +1060,7 @@ class ShinsGameClass {
 		return this.imageCache[image] := {p:bitmap,w:w,h:h}
 	}
 	CacheFont(name,size) {
+		local
 		if (DllCall(this.vTable(this.wFactory,15),"ptr",this.wFactory,"wstr",name,"ptr",0,"uint",400,"uint",0,"uint",5,"float",size,"wstr","en-us","ptr*",textFormat) != 0) {
 			this.Err("Unable to create font: " name " (size: " size ")","Try a different font or check to see if " name " is a valid font!")
 			return 0
@@ -938,11 +1068,13 @@ class ShinsGameClass {
 		return this.fonts[name size] := textFormat
 	}
 	__Delete() {
+		local
 		DllCall("gdiplus\GdiplusShutdown", "Ptr*", this.gdiplusToken)
 		guiID := this.guiID
 		gui %guiID%:destroy
 	}
 	Mcode(str) {
+		local
 		s := strsplit(str,"|")
 		if (s.length() != 2)
 			return
@@ -956,14 +1088,15 @@ class ShinsGameClass {
 		DllCall("GlobalFree", "ptr", p)
 	}
 	WM_MOUSEMOVE(a,b) {
+		local
 		this.mouseX := b & 0xFFFF
 		this.mouseY := b >> 16
 		if (!this.mouseInClient) {
-			varsetcapacity(struct,64,0)
-			numput((this.bits?20:16),struct,0)
-			numput(2,struct,4)
-			numput(this.hwnd,struct,8)
-			DllCall("TrackMouseEvent","ptr",&struct)
+			varsetcapacity(struct,20,0)
+			numput((this.bits?24:16),struct,0,"Uint")
+			numput(2,struct,4,"Uint")
+			numput(this.hwnd,struct,8,"Ptr")
+			DllCall("TrackMouseEvent","Ptr",&struct)
 			this.mouseInClient := 1
 		}
 	}
@@ -991,37 +1124,29 @@ class ShinsGameClass {
 		return false
 	}
 	WM_SIZE(a,b) {
-		if (b != 0) {
-			this.width := b & 0xFFFF
-			this.height := b >> 16
-			if (this.maximized or this.iconic) {
-				VarSetCapacity(newSize,16)
-				NumPut(this.width,newSize,0,"uint")
-				NumPut(this.height,newSize,4,"uint")
-				DllCall(this.vTable(this.renderTarget,58),"Ptr",this.renderTarget,"ptr",&newsize)
-				this.maximized := 0
-				this.iconic := 0
-			}
-		}
-		if (a=1) {
-			this.iconic := 1
+	if (b != 0) {
+		this.newWidth := b & 0xFFFF
+		this.newHeight := b >> 16
+		if (this.maximized or this.iconic) {
+			this.sizeChangeReady := 1
 			this.maximized := 0
-		}
-		if (a=2) {
-			this.maximized := 1
 			this.iconic := 0
-			VarSetCapacity(newSize,16)
-			NumPut(this.width,newSize,0,"uint")
-			NumPut(this.height,newSize,4,"uint")
-			DllCall(this.vTable(this.renderTarget,58),"Ptr",this.renderTarget,"ptr",&newsize)
 		}
+	}
+	if (a=1) {
+		this.iconic := 1
+		this.maximized := 0
+	}
+	if (a=2) {
+		this.maximized := 1
+		this.iconic := 0
+		this.sizeChangeReady := 1
+	}
+
 	}
 	WM_EXITSIZEMOVE() {
 		if (!this.iconic) {
-			VarSetCapacity(newSize,16)
-			NumPut(this.width,newSize,0,"uint")
-			NumPut(this.height,newSize,4,"uint")
-			DllCall(this.vTable(this.renderTarget,58),"Ptr",this.renderTarget,"ptr",&newsize)
+			this.sizeChangeReady := 1
 		}
 	}
 	WM_SHOWWINDOW(a) {
