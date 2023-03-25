@@ -363,7 +363,7 @@ class ShinsGameClass {
 		
 		w := numget(this.tBufferPtr,8,"float")
 		h := numget(this.tBufferPtr,16,"float")
-		
+		DllCall(this.vTable(layout,2),"ptr",layout)
 		return {w:w,width:w,h:h,height:h,lines:numget(this.tBufferPtr,32,"uint")}
 		
 	}
